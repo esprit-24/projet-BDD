@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+
+  # ==========================
+  # MySQL - UGB
+  # ==========================
+  mysql_ugb:
+    image: mysql:8.0
+    container_name: mysql_ugb
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: site_ugb
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_ugb_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+
+  # ==========================
+  # PostgreSQL - UAD
+  # ==========================
+  postgres_uad:
+    image: postgres:15
+    container_name: postgres_uad
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: site_uad
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_uad_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+
+volumes:
+  mysql_ugb_data:
+  postgres_uad_data:

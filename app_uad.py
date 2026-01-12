@@ -1,56 +1,123 @@
 from flask import Flask, request, jsonify
-import mysql.connector
+import psycopg2
+import psycopg2.extras
 
 app = Flask(__name__)
 
-# 🔗 Connexion MySQL UAD
-db = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="",          # adapte si besoin
-    database="site_uad"
-)
+# 🔗 Connexion PostgreSQL UAD (Docker)
+def get_db_connection():
+    return psycopg2.connect(
+        host="localhost",
+        port=5433,
+        database="site_uad",
+        user="postgres",
+        password="postgres"
+    )
 
+# ==========================
+# Étudiants UAD
+# ==========================
 @app.route("/etudiants", methods=["GET"])
 def get_etudiants():
-    cursor = db.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM etudiant_uad")
-    etudiants = cursor.fetchall()
-    return jsonify(etudiants)
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
+    cur.execute("SELECT * FROM etudiant_uad")
+    data = cur.fetchall()
+
+    cur.close()
+    conn.close()
+    return jsonify(data)
+
+@app.route("/etudiants/<int:idEtud>", methods=["GET"])
+def get_etudiant_by_id(idEtud):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    cur.execute("SELECT * FROM etudiant_uad WHERE idEtud = %s", (idEtud,))
+    etudiant = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    if etudiant:
+        return jsonify(etudiant)
+    return jsonify({"erreur": "Étudiant non trouvé"}), 404
+
+# ==========================
+# Ouvrages UAD
+# ==========================
 @app.route("/ouvrages", methods=["GET"])
 def get_ouvrages():
-    cursor = db.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM ouvrage_uad")
-    return jsonify(cursor.fetchall())
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
+    cur.execute("SELECT * FROM ouvrage_uad")
+    data = cur.fetchall()
+
+    cur.close()
+    conn.close()
+    return jsonify(data)
+
+@app.route("/ouvrages/<int:idOuv>", methods=["GET"])
+def get_ouvrage_by_id(idOuv):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    cur.execute("SELECT * FROM ouvrage_uad WHERE idOuv = %s", (idOuv,))
+    ouvrage = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    if ouvrage:
+        return jsonify(ouvrage)
+    return jsonify({"erreur": "Ouvrage non trouvé"}), 404
+
+# ==========================
+# Prêts UAD
+# ==========================
 @app.route("/prets", methods=["GET"])
 def get_prets():
-    cursor = db.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM pret_uad")
-    return jsonify(cursor.fetchall())
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    cur.execute("SELECT * FROM pret_uad")
+    data = cur.fetchall()
+
+    cur.close()
+    conn.close()
+    return jsonify(data)
 
 @app.route("/prets", methods=["POST"])
 def ajouter_pret():
     data = request.json
-    cursor = db.cursor()
 
-    cursor.execute("""
-        INSERT INTO pret_ugb (idOuv, idEtud, date_emprunt, date_retour)
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO pret_uad (idOuv, idEtud, date_emprunt, date_retour)
         VALUES (%s, %s, %s, %s)
     """, (
         data["idOuv"],
         data["idEtud"],
         data["date_emprunt"],
-        data["date_retour"]
+        data.get("date_retour")
     ))
 
-    db.commit()
+    conn.commit()
+    cur.close()
+    conn.close()
+
     return {"message": "Prêt ajouté à UAD"}, 201
 
+# ==========================
+# Accueil
+# ==========================
 @app.route("/")
 def home():
-    return "API UAD connectée à MySQL"
+    return "API UAD connectée à PostgreSQL"
 
 if __name__ == "__main__":
-    app.run(port=5002)
+    app.run(port=5002, debug=True)
