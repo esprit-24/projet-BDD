@@ -58,7 +58,7 @@ projet-BDD/
 
 ---
 
-## 🧭 Cloner et lancer le projet
+## 🧭 Cloner (dans XAMPP et Allumez apache) et lancer le projet
 
 ```bash
 git clone https://github.com/esprit-24/projet-BDD.git
