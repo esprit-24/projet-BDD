@@ -3,11 +3,11 @@
 -- ============================
 
 -- ============================
--- Table AUTEUR
+-- Table AUTEUR (répliquée)
 -- ============================
 CREATE TABLE auteur (
     idAut INT PRIMARY KEY,
-    nom_auteur VARCHAR(100)
+    nom_auteur VARCHAR(100) NOT NULL
 ) ENGINE=InnoDB;
 
 -- ============================
@@ -30,7 +30,7 @@ CREATE TABLE etudiant_ugb (
     adresse VARCHAR(150),
     universite VARCHAR(10),
     specialite VARCHAR(100),
-    nbreEmprunts INT DEFAULT 0
+    nbreEmprunts INT DEFAULT 0 CHECK (nbreEmprunts >= 0)
 ) ENGINE=InnoDB;
 
 -- ============================
@@ -43,7 +43,7 @@ CREATE TABLE ouvrage_ugb (
     editeur VARCHAR(100),
     annee INT,
     domaine VARCHAR(50),
-    stock INT,
+    stock INT CHECK (stock >= 0),
     site VARCHAR(10),
     CONSTRAINT fk_auteur_ugb
         FOREIGN KEY (idAut)
@@ -59,7 +59,7 @@ CREATE TABLE pret_ugb (
     idEtud INT,
     date_emprunt DATE,
     date_retour DATE,
-    CONSTRAINT pk_pret_ugb PRIMARY KEY (idOuv, idEtud),
+    CONSTRAINT pk_pret_ugb PRIMARY KEY (idOuv, idEtud, date_emprunt),
     CONSTRAINT fk_pret_ouvrage_ugb
         FOREIGN KEY (idOuv)
         REFERENCES ouvrage_ugb(idOuv)
@@ -71,14 +71,12 @@ CREATE TABLE pret_ugb (
 ) ENGINE=InnoDB;
 
 -- ============================
-
--- ============================
 -- Données de test UGB
 -- ============================
 
 INSERT INTO auteur VALUES
-(1, 'Auteur UGB 1'),
-(2, 'Auteur UGB 2');
+(1, 'Tanenbaum'),
+(2, 'Elmasri');
 
 INSERT INTO etudiant_ugb VALUES
 (1, 'Diop', 'Saint-Louis', 'UGB', 'Informatique', 0),

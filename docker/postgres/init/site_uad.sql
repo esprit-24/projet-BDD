@@ -3,11 +3,11 @@
 -- ============================
 
 -- ============================
--- Table AUTEUR
+-- Table AUTEUR (répliquée)
 -- ============================
 CREATE TABLE auteur (
     idAut INTEGER PRIMARY KEY,
-    nom_auteur VARCHAR(100)
+    nom_auteur VARCHAR(100) NOT NULL
 );
 
 -- ============================
@@ -30,7 +30,7 @@ CREATE TABLE etudiant_uad (
     adresse VARCHAR(150),
     universite VARCHAR(10),
     specialite VARCHAR(100),
-    nbreEmprunts INTEGER DEFAULT 0
+    nbreEmprunts INTEGER DEFAULT 0 CHECK (nbreEmprunts >= 0)
 );
 
 -- ============================
@@ -43,7 +43,7 @@ CREATE TABLE ouvrage_uad (
     editeur VARCHAR(100),
     annee INTEGER,
     domaine VARCHAR(50),
-    stock INTEGER,
+    stock INTEGER CHECK (stock >= 0),
     site VARCHAR(10),
     CONSTRAINT fk_auteur_uad
         FOREIGN KEY (idAut)
@@ -59,7 +59,7 @@ CREATE TABLE pret_uad (
     idEtud INTEGER,
     date_emprunt DATE,
     date_retour DATE,
-    CONSTRAINT pk_pret_uad PRIMARY KEY (idOuv, idEtud),
+    CONSTRAINT pk_pret_uad PRIMARY KEY (idOuv, idEtud, date_emprunt),
     CONSTRAINT fk_pret_ouvrage_uad
         FOREIGN KEY (idOuv)
         REFERENCES ouvrage_uad(idOuv)
@@ -71,22 +71,20 @@ CREATE TABLE pret_uad (
 );
 
 -- ============================
-
--- ============================
 -- Données de test UAD
 -- ============================
 
 INSERT INTO auteur VALUES
-(1, 'Auteur UAD 1'),
-(2, 'Auteur UAD 2');
+(1, 'Tanenbaum'),
+(2, 'Elmasri');
 
 INSERT INTO etudiant_uad VALUES
 (1, 'Fall', 'Bambey', 'UAD', 'Informatique', 0),
 (2, 'Ndiaye', 'Diourbel', 'UAD', 'Maths', 0);
 
 INSERT INTO ouvrage_uad VALUES
-(1, 'Bases de données', 1, 'Dunod', 2023, 'Informatique', 5, 'UAD'),
-(2, 'Algorithmique', 2, 'Eyrolles', 2022, 'Informatique', 3, 'UAD');
+(1, 'Bases de données', 2, 'Dunod', 2023, 'Informatique', 5, 'UAD'),
+(2, 'Algorithmique', 1, 'Eyrolles', 2022, 'Informatique', 3, 'UAD');
 
 INSERT INTO employe_uad VALUES
 (1, 'Sarr', 'Bambey', 'Bibliothécaire', 'UAD'),

@@ -100,8 +100,8 @@ def ajouter_pret():
         INSERT INTO pret_uad (idOuv, idEtud, date_emprunt, date_retour)
         VALUES (%s, %s, %s, %s)
     """, (
-        data["idOuv"],
-        data["idEtud"],
+        data.get("idOuv") or data.get("idouv"),
+        data.get("idEtud") or data.get("idetud"),
         data["date_emprunt"],
         data.get("date_retour")
     ))
