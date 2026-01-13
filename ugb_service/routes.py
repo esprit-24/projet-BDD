@@ -30,7 +30,9 @@ def get_etudiant_by_id(idEtud):
         return jsonify(etudiant)
     return jsonify({"erreur": "Étudiant non trouvé"}), 404
 
-# ➕ Étudiants ayant fait des emprunts (exigence du sujet)
+# ==========================
+# Étudiants emprunteurs
+# ==========================
 @ugb_routes.route("/etudiants/emprunteurs", methods=["GET"])
 def get_etudiants_emprunteurs():
     conn = get_db_connection()
@@ -56,61 +58,59 @@ def get_ouvrages():
     conn.close()
     return jsonify(data)
 
-@ugb_routes.route("/ouvrages/<int:idOuv>", methods=["GET"])
-def get_ouvrage_by_id(idOuv):
-    conn = get_db_connection()
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT * FROM ouvrage_ugb WHERE idOuv = %s",
-            (idOuv,)
-        )
-        ouvrage = cur.fetchone()
-    conn.close()
-
-    if ouvrage:
-        return jsonify(ouvrage)
-    return jsonify({"erreur": "Ouvrage non trouvé"}), 404
-
 # ==========================
-# Prêts UGB
+# Prêts UGB (AVEC gestion du stock)
 # ==========================
-@ugb_routes.route("/prets", methods=["GET"])
-def get_prets():
-    conn = get_db_connection()
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM pret_ugb")
-        data = cur.fetchall()
-    conn.close()
-    return jsonify(data)
-
-# ➕ Création d’un prêt (simple, logique locale)
 @ugb_routes.route("/prets", methods=["POST"])
 def ajouter_pret():
     data = request.json
-
     conn = get_db_connection()
-    with conn.cursor() as cur:
-        cur.execute("""
-            INSERT INTO pret_ugb (idOuv, idEtud, date_emprunt, date_retour)
-            VALUES (%s, %s, %s, %s)
-        """, (
-            data["idOuv"],
-            data["idEtud"],
-            data["date_emprunt"],
-            data.get("date_retour")
-        ))
 
-        # Mise à jour du nombre d’emprunts (exigence sujet)
-        cur.execute("""
-            UPDATE etudiant_ugb
-            SET nbreEmprunts = nbreEmprunts + 1
-            WHERE idEtud = %s
-        """, (data["idEtud"],))
+    try:
+        with conn.cursor() as cur:
+            # 🔒 Vérifier stock
+            cur.execute(
+                "SELECT stock FROM ouvrage_ugb WHERE idOuv = %s",
+                (data["idOuv"],)
+            )
+            ouvrage = cur.fetchone()
+            if not ouvrage or ouvrage["stock"] <= 0:
+                return jsonify({"erreur": "Ouvrage indisponible"}), 409
+
+            # ➕ Insérer prêt
+            cur.execute("""
+                INSERT INTO pret_ugb (idOuv, idEtud, date_emprunt, date_retour)
+                VALUES (%s, %s, %s, %s)
+            """, (
+                data["idOuv"],
+                data["idEtud"],
+                data["date_emprunt"],
+                data.get("date_retour")
+            ))
+
+            # ➖ Décrémenter stock
+            cur.execute("""
+                UPDATE ouvrage_ugb
+                SET stock = stock - 1
+                WHERE idOuv = %s
+            """, (data["idOuv"],))
+
+            # ➕ Incrémenter emprunts étudiant
+            cur.execute("""
+                UPDATE etudiant_ugb
+                SET nbreEmprunts = nbreEmprunts + 1
+                WHERE idEtud = %s
+            """, (data["idEtud"],))
 
         conn.commit()
+        return jsonify({"message": "Prêt ajouté à UGB"}), 201
 
-    conn.close()
-    return jsonify({"message": "Prêt ajouté à UGB"}), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"erreur": str(e)}), 500
+
+    finally:
+        conn.close()
 
 # ==========================
 # Accueil

@@ -4,6 +4,8 @@ from config import UGB_URL, UAD_URL, TIMEOUT
 
 routes = Blueprint("routes", __name__)
 
+MAX_EMPRUNTS = 3  # règle métier globale
+
 # ==========================
 # Helpers HTTP sécurisés
 # ==========================
@@ -12,7 +14,7 @@ def safe_get(url):
         r = requests.get(url, timeout=TIMEOUT)
         r.raise_for_status()
         return r.json()
-    except Exception as e:
+    except Exception:
         return None
 
 def safe_post(url, payload):
@@ -24,14 +26,13 @@ def safe_post(url, payload):
         return {"erreur": str(e)}, 500
 
 # ==========================
-# 1️⃣ Tous les étudiants (fusion)
+# Étudiants (fusion)
 # ==========================
 @routes.route("/etudiants", methods=["GET"])
 def tous_les_etudiants():
     etu_ugb = safe_get(f"{UGB_URL}/etudiants") or []
     etu_uad = safe_get(f"{UAD_URL}/etudiants") or []
 
-    # Marquer l’origine
     for e in etu_ugb:
         e["universite_origine"] = "UGB"
     for e in etu_uad:
@@ -40,7 +41,7 @@ def tous_les_etudiants():
     return jsonify(etu_ugb + etu_uad)
 
 # ==========================
-# 2️⃣ Étudiants ayant fait des emprunts (global)
+# Étudiants emprunteurs
 # ==========================
 @routes.route("/etudiants/emprunteurs", methods=["GET"])
 def etudiants_emprunteurs():
@@ -55,7 +56,7 @@ def etudiants_emprunteurs():
     return jsonify(emp_ugb + emp_uad)
 
 # ==========================
-# 3️⃣ Tous les ouvrages (fusion)
+# Ouvrages (fusion)
 # ==========================
 @routes.route("/ouvrages", methods=["GET"])
 def tous_les_ouvrages():
@@ -70,7 +71,7 @@ def tous_les_ouvrages():
     return jsonify(ouv_ugb + ouv_uad)
 
 # ==========================
-# 4️⃣ Créer un emprunt distribué (logique centrale)
+# Emprunt distribué (clé composée)
 # ==========================
 @routes.route("/emprunt", methods=["POST"])
 def creer_emprunt():
@@ -78,62 +79,68 @@ def creer_emprunt():
     if not data:
         return jsonify({"erreur": "Données manquantes"}), 400
 
-    universite = data.get("universite")  # université de l'étudiant
-    idEtud = data.get("idEtud")
-    idOuv = data.get("idOuv")
+    universite = data.get("universite")
+    site_ouvrage = data.get("siteOuvrage")
+    idEtud = int(data.get("idEtud"))
+    idOuv = int(data.get("idOuv"))
     date_emprunt = data.get("date_emprunt")
-    date_retour = data.get("date_retour")
 
-    if not all([universite, idEtud, idOuv, date_emprunt]):
+    if not all([universite, site_ouvrage, idEtud, idOuv, date_emprunt]):
         return jsonify({"erreur": "Champs requis manquants"}), 400
 
-    # Choix du service selon l’université d’origine de l’étudiant
+    # Choix du service étudiant
     if universite == "UGB":
         service = UGB_URL
     elif universite == "UAD":
         service = UAD_URL
     else:
-        return jsonify({"erreur": "Université invalide (UGB ou UAD)"}), 400
+        return jsonify({"erreur": "Université invalide"}), 400
 
-    # Vérifier existence étudiant
+    # Vérifier étudiant
     etu = safe_get(f"{service}/etudiants/{idEtud}")
     if not etu:
         return jsonify({"erreur": "Étudiant introuvable"}), 404
 
-    # Vérifier existence ouvrage (dans toutes les bibliothèques)
-    ouvrages = safe_get(f"{UGB_URL}/ouvrages") or []
-    ouvrages += safe_get(f"{UAD_URL}/ouvrages") or []
+    # Règle métier : quota
+    if etu["nbreEmprunts"] >= MAX_EMPRUNTS:
+        return jsonify({
+            "erreur": "Limite d’emprunts atteinte",
+            "max": MAX_EMPRUNTS
+        }), 403
 
-    ouvrage = next((o for o in ouvrages if o["idOuv"] == idOuv), None)
+    # Vérifier ouvrage par (idOuv, site)
+    ouvrages = (safe_get(f"{UGB_URL}/ouvrages") or []) + \
+               (safe_get(f"{UAD_URL}/ouvrages") or [])
+
+    ouvrage = next(
+        (o for o in ouvrages
+         if o["idOuv"] == idOuv and o["site"] == site_ouvrage),
+        None
+    )
+
     if not ouvrage:
         return jsonify({"erreur": "Ouvrage introuvable"}), 404
 
     if ouvrage["stock"] <= 0:
         return jsonify({"erreur": "Ouvrage indisponible"}), 409
 
-    # Créer le prêt dans l’université d’origine de l’étudiant
+    # Création du prêt
     payload = {
         "idEtud": idEtud,
         "idOuv": idOuv,
-        "date_emprunt": date_emprunt,
-        "date_retour": date_retour
+        "date_emprunt": date_emprunt
     }
 
     response, status = safe_post(f"{service}/prets", payload)
     return jsonify(response), status
 
 # ==========================
-# Accueil / documentation
+# Accueil
 # ==========================
 @routes.route("/", methods=["GET"])
 def home():
     return jsonify({
         "service": "Microservice Bibliothèque Universitaire",
-        "role": "Distribution et agrégation des données",
-        "endpoints": {
-            "GET /etudiants": "Tous les étudiants (UGB + UAD)",
-            "GET /etudiants/emprunteurs": "Étudiants ayant emprunté",
-            "GET /ouvrages": "Tous les ouvrages",
-            "POST /emprunt": "Créer un emprunt distribué"
-        }
+        "regle_cle": "Identification globale par (idOuv, site)",
+        "max_emprunts": MAX_EMPRUNTS
     })
